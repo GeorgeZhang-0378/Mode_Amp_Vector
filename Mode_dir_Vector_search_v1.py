@@ -388,6 +388,22 @@ def compute_mode_direction_vectors(parent, distorted, Q):
     Therefore:
 
         mode_direction_vector_cart = (r_distorted_cart - r_parent_cart) / Q
+
+    Periodic boundary condition correction:
+    - Fractional coordinates are periodic.
+    - Therefore, an atom going from 0.990 to 0.010 should usually be interpreted
+      as a small positive displacement, not a large negative jump across the cell.
+    - We apply the minimum-image convention:
+
+          delta_frac_pbc = delta_frac_raw - round(delta_frac_raw)
+
+      which maps each fractional displacement component into [-0.5, 0.5].
+
+    Important assumption:
+    - This assumes the real displacement is smaller than half a unit cell along
+      each fractional direction.
+    - This is normally valid for small/medium mode distortions.
+    - It may fail for very large distortions or incorrect atom mapping.
     """
     results = []
 
@@ -400,7 +416,29 @@ def compute_mode_direction_vectors(parent, distorted, Q):
         p_cart = frac_to_cart(p_frac, parent["lattice"])
         d_cart = frac_to_cart(d_frac, distorted["lattice"])
 
-        displacement_cart = d_cart - p_cart
+        # Raw fractional displacement
+        delta_frac_raw = d_frac - p_frac
+
+        # Apply minimum-image convention for periodic boundary conditions.
+        # This maps fractional displacements into the range [-0.5, 0.5].
+        delta_frac_pbc = delta_frac_raw - np.round(delta_frac_raw)
+
+        # Check whether PBC wrapping was applied.
+        pbc_wrapped = np.any(np.abs(delta_frac_raw - delta_frac_pbc) > 1e-12)
+
+        if pbc_wrapped:
+            print(
+                f"WARNING: PBC wrapping applied for atom {i} ({species}). "
+                f"Raw delta_frac = {delta_frac_raw}, "
+                f"PBC delta_frac = {delta_frac_pbc}"
+            )
+
+        # Convert PBC-corrected fractional displacement into Cartesian displacement.
+        #
+        # We use the parent lattice here because the mode direction vector is
+        # defined relative to the parent reference structure.
+        displacement_cart = delta_frac_pbc @ parent["lattice"]
+
         mode_direction_vector_cart = displacement_cart / Q
 
         results.append({
@@ -410,12 +448,14 @@ def compute_mode_direction_vectors(parent, distorted, Q):
             "distorted_frac": d_frac,
             "parent_cart": p_cart,
             "distorted_cart": d_cart,
+            "delta_frac_raw": delta_frac_raw,
+            "delta_frac_pbc": delta_frac_pbc,
+            "pbc_wrapped": pbc_wrapped,
             "displacement_cart": displacement_cart,
             "mode_direction_vector_cart": mode_direction_vector_cart
         })
 
     return results
-
 
 def print_mode_direction_vectors(results, Q):
     print("\n" + "=" * 70)
@@ -441,7 +481,20 @@ def print_mode_direction_vectors(results, Q):
 
         print(f"{i:5d} {sp:<4} {p_str:<38} + Q {v_str:<38}")
 
+def print_copyable_mode_vectors(results):
+    print("\n" + "=" * 70)
+    print("Copyable mode direction vectors")
+    print("=" * 70)
+    print("Format:")
+    print("    index species (vx, vy, vz)")
+    print("\nCartesian mode direction vectors in angstrom:")
 
+    for item in results:
+        i = item["index"]
+        sp = item["species"]
+        v = item["mode_direction_vector_cart"]
+
+        print(f"{i:5d} {sp:<2} ({v[0]: .8f}, {v[1]: .8f}, {v[2]: .8f})")
 # ============================================================
 # Main interactive program
 # ============================================================
@@ -468,6 +521,7 @@ def main():
 
     results = compute_mode_direction_vectors(parent, distorted, Q)
     print_mode_direction_vectors(results, Q)
+    print_copyable_mode_vectors(results)
 
     print("\nDone.")
 
