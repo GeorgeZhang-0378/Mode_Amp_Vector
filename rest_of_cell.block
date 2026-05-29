@@ -9,3 +9,9 @@ FIX_COM : true
 SYMMETRY_GENERATE
 
 kpoint_mp_grid :  4 4 4   
+
+
+
+#for f in Ca*.block; do
+#    cat "$f" rest_of_cell.block > "${f%.block}.cell"
+#done
