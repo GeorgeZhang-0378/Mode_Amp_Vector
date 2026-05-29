@@ -1,0 +1,11 @@
+%BLOCK SPECIES_POT
+   O         O_C19_PBESOL_OTF.usp
+   Ca        Ca_C19_PBESOL_OTF.usp
+   Mn        Mn_C19_PBESOL_OTF.usp
+%ENDBLOCK SPECIES_POT
+
+FIX_COM : true
+
+SYMMETRY_GENERATE
+
+kpoint_mp_grid :  4 4 4   
